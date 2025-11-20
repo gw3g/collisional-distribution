@@ -250,6 +250,7 @@ double eval_S_L(double eps, void *params) {
 double eval_S_tot(double eps, void *params) {
   //cout << " eps = " << eps << endl;
   if (eps<1e-8) { return 1./3. - (8./9.)*pow(2.*eps/sqr(M_PI),2./3.)+M_PI*eps/4.; }
+  if (eps>60.) { return 1./(6.*sqr(eps)) + 1./(3.*sqr(eps)-1.) + (55.-18.*log(8.*sqr(eps)))/(72.*pow(eps,4.)); }
   double e2 = sqr(eps), q2T = q2_T(eps), q2L = q2_L(eps);
   return  (2/3.)*( 1./(3.*(e2-q2L)-1.) - e2/(3.*sqr(e2-q2T)-e2) );
 }

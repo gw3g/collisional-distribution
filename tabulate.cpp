@@ -28,6 +28,17 @@ double _SL_integrand(double X, void *params) {
   return eval_S_L(eps,params)/sqr(X);
 }
 
+double _S_times_eps(double X, void *params) {
+  double eps = (X);
+  return eps*eval_S_tot(eps,params);
+}
+
+double _S_subtr(double X, void *params) {
+  double eps = 1.-.1*(1.-1./X);
+  //double eps = (X);
+  return .1*eps*( eval_S_tot(eps,params) - .5/sqr(eps) )/sqr(X);
+}
+
 double _S_sin_integrand(double X, void *params) {
   double eps = X;
   //double eps = - (1.-1/X);
@@ -121,7 +132,21 @@ int main() {
 
   integrator(0.,1.,_SL_integrand,params,&s,&s_err);
   cout << " cL  = " << s << " [err = " << s_err << "]" << endl;
-  cout << endl;
+
+  cout << "\n --> checking constants in large-x limit: " << endl;
+
+  double temp;
+  integrator(0.,1.,_S_times_eps,params,&s,&s_err);
+  cout << " c1  = " << s << " [err = " << s_err << "]"<< endl;
+  temp += s;
+
+  integrator(0.,1.,_S_subtr,params,&s,&s_err);
+  cout << " c2  = " << s << " [err = " << s_err << "]"<< endl;
+  temp += s;
+
+  temp *= 2.;
+  temp += 1.-GAMMA_E;
+  cout << " 2(c1+c2)+1-gamma  = " << temp << endl;
 
   cout << "\n --> tabulating g & h functions: " << endl;
 
