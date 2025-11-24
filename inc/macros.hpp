@@ -24,3 +24,8 @@ typedef std::vector<double> vd;
 std::ofstream fout;
 std::ifstream fin;
 
+const double c0  = 0.72035400;
+const double cT  = 0.24944610;
+const double cL  = 0.47090790;
+
+
