@@ -115,7 +115,7 @@ double g_L(double eta) {
 }
 
 /*--------------------------------------------------------------------*/
-// the function chi(eta,mD/T)
+// the function r(eta,mD/T)
 
 double nB(double x) {
   if (x>0) {
@@ -126,14 +126,14 @@ double nB(double x) {
   else { return -(1.+nB(-x)); }
 }
 
-double _chi_integrand(double eps, void *params) {
+double _r_integrand(double eps, void *params) {
   double eta       = ((double *)params)[0];
   double mD_over_T = ((double *)params)[1];
   double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
   return (1.-cos(eta*eps))*res;
 }
 
-double _chi_one_integrand(double X, void *params) {
+double _r_one_integrand(double X, void *params) {
   double eta       = ((double *)params)[0];
   double mD_over_T = ((double *)params)[1];
   double a         = ((double *)params)[2];
@@ -142,14 +142,14 @@ double _chi_one_integrand(double X, void *params) {
   return res/sqr(X);
 }
 
-double _chi_cos_integrand(double eps, void *params) {
+double _r_cos_integrand(double eps, void *params) {
   double eta       = ((double *)params)[0];
   double mD_over_T = ((double *)params)[1];
   double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
   return res; // omit cos(eta*eps) factor!
 }
 
-double chi(double eta, double mD_over_T) {
+double r(double eta, double mD_over_T) {
   if (mD_over_T < 1e-3) { return 0.; }
   double a=M_PI/2./eta;//0.;
   double params[3];
@@ -158,26 +158,26 @@ double chi(double eta, double mD_over_T) {
   params[1] = mD_over_T;
   params[2] = a;
   //cout << " gL: " << endl;
-  integrator(0.,a,_chi_integrand,params,&res1,&err);
-  integrator(0.,1.,_chi_one_integrand,params,&res2,&err);
-  integrate_osc(a,_chi_cos_integrand,params,&res3,&err,GSL_INTEG_COSINE);
+  integrator(0.,a,_r_integrand,params,&res1,&err);
+  integrator(0.,1.,_r_one_integrand,params,&res2,&err);
+  integrate_osc(a,_r_cos_integrand,params,&res3,&err,GSL_INTEG_COSINE);
   return 4.*(res1+res2-res3);
 }
 
-double _chi_A(double eps, void *params) {
+double _r_A(double eps, void *params) {
   double mD_over_T = ((double *)params)[1];
   double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
   return res - 1./(3.*eps*mD_over_T);
 }
 
-double _chi_B(double X, void *params) {
+double _r_B(double X, void *params) {
   double eps = 1./X;
   double mD_over_T = ((double *)params)[1];
   double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
   return res/sqr(X);
 }
 
-double _chi_D(double X, void *params) {
+double _r_D(double X, void *params) {
   double eps = - 1. + 1./X;
   double mD_over_T = ((double *)params)[1];
   double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
@@ -185,23 +185,144 @@ double _chi_D(double X, void *params) {
 
 }
 
-double chi_large_eta_const(double mD_over_T) {
+double r_large_eta_const(double mD_over_T) {
   double params[2];
   double res1, res2, err;
   params[0] = 0.;
   params[1] = mD_over_T;
-  integrator(0.,1.,_chi_A,params,&res1,&err);
-  integrator(0.,1.,_chi_B,params,&res2,&err);
+  integrator(0.,1.,_r_A,params,&res1,&err);
+  integrator(0.,1.,_r_B,params,&res2,&err);
   return res1+res2;
 }
 
-double chi_small_eta_const(double mD_over_T) {
+double r_small_eta_const(double mD_over_T) {
   double params[2];
   double res, err;
   params[0] = 0.;
   params[1] = mD_over_T;
-  integrator(1e-4,1.,_chi_D,params,&res,&err);
+  integrator(1e-4,1.,_r_D,params,&res,&err);
   return 2.*res;
+}
+
+/*--------------------------------------------------------------------*/
+
+void tabulate_g_h(int eta_N) {
+
+  fout.open("data/table_g_h.dat");
+  fout.precision(8);
+  fout << "# columns:\n";
+  fout << "# eta,            hT,               hL,               gT,               gL\n";
+
+  double eta, hT, hL, gT, gL;
+  double eta_min, eta_max;
+
+  //int eta_N = 5000;
+
+  eta_min = 1e-3, eta_max=1e1;
+  double delta  = (eta_max-eta_min)/((double)eta_N-1);
+  eta = eta_min;
+
+  loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
+
+    if (eta>1e2) { tolosc = 1e-7; }
+    hT = h_T(eta);
+    hL = h_L(eta);
+    gT = g_T(eta);
+    gL = g_L(eta);
+    cout << eta << endl;
+
+    fout << scientific << eta
+         <<     "    " << hT
+         <<     "    " << hL
+         <<     "    " << gT
+         <<     "    " << gL
+         << endl;
+
+    eta += delta;
+  }
+
+  eta_min = 1e1, eta_max=1e3;
+  double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
+  eta = eta_min*ratio;
+
+  loop(i,1,eta_N) { // second loop is log scale for eta ~ [10,1000]
+
+    if (eta>1e2) { tolosc = 1e-7; }
+    hT = h_T(eta);
+    hL = h_L(eta);
+    gT = g_T(eta);
+    gL = g_L(eta);
+    cout << eta << endl;
+
+    fout << scientific << eta
+         <<     "    " << hT
+         <<     "    " << hL
+         <<     "    " << gT
+         <<     "    " << gL
+         << endl;
+
+    eta *= ratio;
+  }
+
+  fout.close();
+  cout << " finished... " << endl;//*/
+
+}
+
+void tabulate_r(int eta_N, double mD_over_T) {
+
+  stringstream filename;
+  filename << "data/table_r_mDoT=" << fixed << setprecision(1) << mD_over_T << ".dat";
+
+  fout.open(filename.str());
+  //fout.open("data/table_r.dat");
+  fout << "# columns:\n";
+  fout << "# eta,            r(" << fixed << setprecision(1) << mD_over_T << ")\n";
+  fout.precision(8);
+
+  double eta, r_a;
+  double eta_min, eta_max;
+
+  //int eta_N = 5000;
+
+  eta_min = 1e-3, eta_max=1e1;
+  double delta  = (eta_max-eta_min)/((double)eta_N-1);
+  eta = eta_min;
+
+  loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
+
+    if (eta>1e2) { tolosc = 1e-6; }
+    r_a = r(eta,mD_over_T);
+    cout << eta << endl;
+
+    fout << scientific << eta
+         <<     "    " << r_a
+         << endl;
+
+    eta += delta;
+  }
+
+  eta_min = 1e1, eta_max=1e3;
+  double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
+  eta = eta_min*ratio;
+
+  loop(i,1,eta_N) { // second loop is log scale for eta ~ [10,1000]
+
+    if (eta>1e2) { tolosc = 1e-6; }
+    r_a = r(eta,mD_over_T);
+    cout << eta << endl;
+
+    fout << scientific << eta
+         <<     "    " << r_a
+         << endl;
+
+    eta *= ratio;
+  }
+
+  fout.close();
+  cout << " finished... " << endl;//*/
+
+
 }
 
 /*--------------------------------------------------------------------*/
@@ -209,18 +330,17 @@ double chi_small_eta_const(double mD_over_T) {
 int main() {
 
   cout.precision(8);
-    double eta_=0.01, mD_over_T=.3;
-  double res = chi(eta_,mD_over_T);
-  double cst = chi_large_eta_const(mD_over_T);
-  double c2  = chi_small_eta_const(mD_over_T);
+    double eta_=0.01, mD_over_T=10.;
+  double res = r(eta_,mD_over_T);
+  double cst = r_large_eta_const(mD_over_T);
+  double c2  = r_small_eta_const(mD_over_T);
   cout << " eta  = " << eta_ << endl;
   cout << " mD/T = " << mD_over_T << endl;
-  cout << " chi  = " << res << endl;
+  cout << "   r  = " << res << endl;
   cout << " cst  = " << cst << endl;
   cout << " est. = " << 4.*( (1./(3.*mD_over_T))*( log(eta_) + GAMMA_E ) + cst  ) << endl;
   cout << " c2= " << c2<< endl;
   cout << " small= " << c2*sqr(eta_) << endl;
-  return 0;
 
   double s, s_err;
   double params[1] = {0.};
@@ -251,7 +371,12 @@ int main() {
   temp += 1.-GAMMA_E;
   cout << " 2(c1+c2)+1-gamma  = " << temp << endl;
 
-  return 0;
+  //return 0;
+
+  //cout << "\n --> tabulating g & h functions: " << endl;
+
+  //tabulate_g_h(5000);
+
   /*
 
   cout << "\n --> tabulating g & h functions: " << endl;
@@ -315,14 +440,17 @@ int main() {
   fout.close();
   cout << " finished... " << endl;//*/
 
-  cout << "\n --> tabulating the chi function: " << endl;
+  cout << "\n --> tabulating the r function: " << endl;
 
-  fout.open("data/table_chi.dat");
+  tabulate_r(5000,3.);
+
+  /*
+  fout.open("data/table_r.dat");
   fout.precision(8);
   fout << "# columns:\n";
-  fout << "# eta,            chi(0.1),         chi(0.3),         chi(1.0),         chi(10.)\n";
+  fout << "# eta,            r(0.1),         r(0.3),         r(1.0),         r(10.)\n";
 
-  double eta, chi_a, chi_b, chi_c, chi_d, chi_e;
+  double eta, r_a, r_b, r_c, r_d, r_e;
   double eta_min, eta_max;
 
   int eta_N = 5000;
@@ -334,17 +462,17 @@ int main() {
   loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
 
     if (eta>1e2) { tolosc = 1e-6; }
-    chi_a = chi(eta,.1);
-    chi_b = chi(eta,.3);
-    chi_c = chi(eta,1.);
-    chi_d = chi(eta,10.);
+    r_a = r(eta,.1);
+    r_b = r(eta,.3);
+    r_c = r(eta,1.);
+    r_d = r(eta,10.);
     cout << eta << endl;
 
     fout << scientific << eta
-         <<     "    " << chi_a
-         <<     "    " << chi_b
-         <<     "    " << chi_c
-         <<     "    " << chi_d
+         <<     "    " << r_a
+         <<     "    " << r_b
+         <<     "    " << r_c
+         <<     "    " << r_d
          << endl;
 
     eta += delta;
@@ -357,17 +485,17 @@ int main() {
   loop(i,0,eta_N) { // second loop is log scale for eta ~ [10,1000]
 
     if (eta>1e2) { tolosc = 1e-6; }
-    chi_a = chi(eta,.1);
-    chi_b = chi(eta,.3);
-    chi_c = chi(eta,1.);
-    chi_d = chi(eta,10.);
+    r_a = r(eta,.1);
+    r_b = r(eta,.3);
+    r_c = r(eta,1.);
+    r_d = r(eta,10.);
     cout << eta << endl;
 
     fout << scientific << eta
-         <<     "    " << chi_a
-         <<     "    " << chi_b
-         <<     "    " << chi_c
-         <<     "    " << chi_d
+         <<     "    " << r_a
+         <<     "    " << r_b
+         <<     "    " << r_c
+         <<     "    " << r_d
          << endl;
 
     eta *= ratio;

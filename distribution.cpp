@@ -6,6 +6,141 @@ using namespace std;
 
 double const c1  =  0.143575;
 double const c2  = -0.123714;
+
+/*--------------------------------------------------------------------*/
+// useful integrands:
+
+double _S_integrand(double X, void *params) {
+  double a = ((double *)params)[0];
+  double eps = a - (1.-1/X);
+  return eval_S_tot(eps,params)/sqr(X);
+}
+
+double _ST_integrand(double X, void *params) {
+  double a = ((double *)params)[0];
+  double eps = a - (1.-1/X);
+  return eval_S_T(eps,params)/sqr(X);
+}
+
+double _SL_integrand(double X, void *params) {
+  double a = ((double *)params)[0];
+  double eps = a - (1.-1/X);
+  return eval_S_L(eps,params)/sqr(X);
+}
+
+double _S_times_eps(double X, void *params) {
+  double eps = (X);
+  return eps*eval_S_tot(eps,params);
+}
+
+double _S_subtr(double X, void *params) {
+  double eps = 1.-.1*(1.-1./X);
+  //double eps = (X);
+  return .1*eps*( eval_S_tot(eps,params) - .5/sqr(eps) )/sqr(X);
+}
+
+double _S_sin_integrand(double X, void *params) {
+  double eps = X;
+  //double eps = - (1.-1/X);
+  double eta = ((double *)params)[0];
+  //double eps = t/eta;
+  //cout << " eta = " << eta << " , eps = " << eps << endl;
+  return sin(eta*eps)*eval_S_tot(eps,params);
+}
+
+double _ST_cos_integrand(double eps, void *params) {
+  //double eps = - (1.-1/X);
+  double eta = ((double *)params)[0];
+  //double eps = t/eta;
+  //cout << " eta = " << eta << " , eps = " << eps << endl;
+  //return (1.-cos(eta*eps))*eval_S_T(eps,params);
+  return (cos(eta*eps))*eval_S_T(eps,params);
+  //return (1.)*eval_S_T(eps,params);
+}
+
+double _SL_cos_integrand(double eps, void *params) {
+  //double eps = - (1.-1/X);
+  double eta = ((double *)params)[0];
+  //double eps = t/eta;
+  //cout << " eta = " << eta << " , eps = " << eps << endl;
+  return (cos(eta*eps))*eval_S_L(eps,params);
+}
+
+/*--------------------------------------------------------------------*/
+// the function r(eta,mD/T)
+
+double nB(double x) {
+  if (x>0) {
+    double e = exp(-x), denom;
+    denom = - expm1(-x);
+    return e/denom;
+  }
+  else { return -(1.+nB(-x)); }
+}
+
+double _r_integrand(double eps, void *params) {
+  double eta       = ((double *)params)[0];
+  double mD_over_T = ((double *)params)[1];
+  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
+  return (1.-cos(eta*eps))*res;
+}
+
+double _r_one_integrand(double X, void *params) {
+  double eta       = ((double *)params)[0];
+  double mD_over_T = ((double *)params)[1];
+  double a         = ((double *)params)[2];
+  double eps = a-(1.-1./X);
+  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
+  return res/sqr(X);
+}
+
+double _r_cos_integrand(double eps, void *params) {
+  double eta       = ((double *)params)[0];
+  double mD_over_T = ((double *)params)[1];
+  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
+  return res; // omit cos(eta*eps) factor!
+}
+
+double _r_A(double eps, void *params) {
+  double mD_over_T = ((double *)params)[1];
+  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
+  return res - 1./(3.*eps*mD_over_T);
+}
+
+double _r_B(double X, void *params) {
+  double eps = 1./X;
+  double mD_over_T = ((double *)params)[1];
+  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
+  return res/sqr(X);
+}
+
+double _r_D(double X, void *params) {
+  double eps = - 1. + 1./X;
+  double mD_over_T = ((double *)params)[1];
+  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
+  return res*sqr(eps)/sqr(X);
+
+}
+
+double r_large_eta_const(double mD_over_T) {
+  double params[2];
+  double res1, res2, err;
+  params[0] = 0.;
+  params[1] = mD_over_T;
+  integrator(0.,1.,_r_A,params,&res1,&err);
+  integrator(0.,1.,_r_B,params,&res2,&err);
+  return res1+res2;
+}
+
+double r_small_eta_const(double mD_over_T) {
+  double params[2];
+  double res, err;
+  params[0] = 0.;
+  params[1] = mD_over_T;
+  integrator(1e-4,1.,_r_D,params,&res,&err);
+  return 2.*res;
+}
+
 /*--------------------------------------------------------------------*/
 // convergence acceleration
 
@@ -56,11 +191,22 @@ namespace itp {
   static gsl_spline *spline_h_L = nullptr;
   static gsl_spline *spline_g_T = nullptr;
   static gsl_spline *spline_g_L = nullptr;
-  static gsl_spline *spline_chi = nullptr;
+  static gsl_spline *spline_r   = nullptr;
 
-  void init(double mD_over_T) {
-    vd eta_list, hT_list, hL_list, gT_list, gL_list, chi_list;
+  double mD_over_T;
+  double r_large;
+  double r_small;
+
+  void init(double _mD) {
+    vd eta_list, hT_list, hL_list, gT_list, gL_list, r_list;
     string line;
+    mD_over_T = _mD;
+
+    auto mk_spline = [](vd &x, vd &y) {
+      gsl_spline *spl = gsl_spline_alloc(gsl_interp_cspline, x.sz);
+      gsl_spline_init(spl,x.ar,y.ar,x.sz);
+      return spl;
+    };
 
     //ifstream file("data/table_g_h.dat");
     fin.open("data/table_g_h.dat");
@@ -77,34 +223,39 @@ namespace itp {
       gL_list.push_back(_gL);
     }
 
-    fin.close();
-
-    fin.open("data/table_chi.dat");
-
-    while (getline(fin, line)) {
-      if (line.empty() || line[0]=='#') continue;
-      stringstream ss(line);
-      double _eta, _chi1, _chi2, _chi3, _chi4;
-      ss >> _eta >> _chi1 >> _chi2 >> _chi3 >> _chi4;
-      //eta_list.push_back(_eta); (already done)
-      chi_list.push_back(_chi2);
-    }
-
-    fin.close();
-
-    auto mk_spline = [](vd &x, vd &y) {
-      gsl_spline *spl = gsl_spline_alloc(gsl_interp_cspline, x.sz);
-      gsl_spline_init(spl,x.ar,y.ar,x.sz);
-      return spl;
-    };
-
     accelerator = gsl_interp_accel_alloc();
     spline_h_T  = mk_spline(eta_list,hT_list);
     spline_h_L  = mk_spline(eta_list,hL_list);
     spline_g_T  = mk_spline(eta_list,gT_list);
     spline_g_L  = mk_spline(eta_list,gL_list);
 
-    spline_chi  = mk_spline(eta_list,chi_list);
+    fin.close();
+
+    stringstream filename;
+    filename << "data/table_r_mDoT=" << fixed << setprecision(1) << mD_over_T << ".dat";
+
+    r_large = r_large_eta_const(mD_over_T);
+    r_small = r_small_eta_const(mD_over_T);
+    cout << "\n" << " r-large = " << r_large << endl;
+    cout         << " r-small = " << r_small << endl;
+
+    fin.open(filename.str());
+    //fin.open("data/table_chi.dat");
+
+    eta_list.clear();
+    while (getline(fin, line)) {
+      if (line.empty() || line[0]=='#') continue;
+      stringstream ss(line);
+      double _eta, _r1;// _chi2, _chi3, _chi4;
+      ss >> _eta >> _r1;// >> _chi2 >> _chi3 >> _chi4;
+      eta_list.push_back(_eta); //(already done)
+      r_list.push_back(_r1);
+      cout << " eta = " << _eta << " , r = " << _r1 << endl;
+    }
+
+    fin.close();
+
+    spline_r  = mk_spline(eta_list,r_list);
   }
 
   void free() {
@@ -112,7 +263,7 @@ namespace itp {
     gsl_spline_free(spline_h_L);
     gsl_spline_free(spline_g_T);
     gsl_spline_free(spline_g_L);
-    gsl_spline_free(spline_chi);
+    gsl_spline_free(spline_r);
     gsl_interp_accel_free(accelerator);
   }
 
@@ -136,13 +287,18 @@ namespace itp {
     else if (eta>1e3) { return 2.*( cL + .785398/pow(eta,2) ); }
     else { return gsl_spline_eval(spline_g_L, eta, accelerator); }
   }
-  double chi(double eta) {
-    if (eta<1e-3) { return (4.7866666)*sqr(eta); }
+  double r(double eta) {
+    //if (eta<1e-3) { return (4.7866666)*sqr(eta); } // mD/T = 0.3
+    //if (eta<1e-3) { return (0.0014929826)*sqr(eta); } // mD/T = 10.
+    if (eta<1e-3) { return (r_small)*sqr(eta); } // mD/T = 10.
     else if (eta>1e3) { 
-      double mD_over_T = .3;
-      return 4.*( (1./(3.*mD_over_T))*( log(eta) + GAMMA_E ) + (-0.046050746) );
+      //double mD_over_T = .3;
+      //double mD_over_T = 10.;
+      //return 4.*( (1./(3.*mD_over_T))*( log(eta) + GAMMA_E ) + (-0.046050746) ); // mD/T = 0.3
+      //return 4.*( (1./(3.*mD_over_T))*( log(eta) + GAMMA_E ) + (-0.081409316) ); // mD/T = 10.
+      return 4.*( (1./(3.*mD_over_T))*( log(eta) + GAMMA_E ) + (r_large) );
     }
-    else { return gsl_spline_eval(spline_chi, eta, accelerator); }
+    else { return gsl_spline_eval(spline_r, eta, accelerator); }
   }
 
 
@@ -151,11 +307,11 @@ namespace itp {
     double Del = ((double *)params)[1];
     double h = h_T(eta) + h_L(eta);
     double g = g_T(eta) + g_L(eta);
-    double ch = chi(eta);
+    double ch = r(eta);
     //double res = 
     //cos( eta*Del - x*h )*exp( -x*(g-2.*c0) ) - cos( eta*Del );
     //return res*exp( -x*2.*c0 ) ;
-    return cos( eta*Del - x*h )*exp( -x*(g+ch) );
+    return cos( eta*Del - x*h )*exp( -x*(g+ch) );// - exp(-x*2.*c0)*cos( eta*Del );
   }
 
   double lev_int(double x, double Del) {
@@ -168,7 +324,7 @@ namespace itp {
     double width = M_PI/fabs(Del);
     int nterm = 100;
     double beta=.5, a=width/2., b=width/2., sum=.0;
-    Levin series(200,0.);
+    Levin series(100,0.);
     cout << setw(5) << "N" << setw(19) << "Sum (direct)" << setw(21)
          << "Sum (Levin)" << endl;
     integrator(0.,width/2.,_eta_integrand,params,&ans_0,&err_0);
@@ -253,17 +409,33 @@ namespace itp {
 int main() {
   using namespace itp;
 
-  init(0.3);
+  init(1.0);
 
-  double eta = .9e-3;
+  //double eta = .5;
   //
   //cout << " eta = " << eta      << " :\n";
   //cout << " hT  = " << h_T(eta) << endl;
   //cout << " hL  = " << h_L(eta) << endl;
   //cout << " gT  = " << g_T(eta) << endl;
-  //cout << " gL  = " << g_L(eta) << endl;
-  //cout << " chi = " << chi(eta) << endl;
+  ////cout << " gL  = " << g_L(eta) << endl;
+  //cout << " r   = " <<   r(eta) << endl;
 
+  scan_Del(.2,"data/f_kappa_1p0_x_0p2.dat");
+  scan_Del(.4,"data/f_kappa_1p0_x_0p4.dat");
+  scan_Del(.6,"data/f_kappa_1p0_x_0p6.dat");
+  scan_Del(.8,"data/f_kappa_1p0_x_0p8.dat");
+  scan_Del(2.,"data/f_kappa_1p0_x_2p0.dat");
+  scan_Del(8.,"data/f_kappa_1p0_x_8p0.dat");
+
+  scan_scaled(.2,"data/scaled_f_kappa_1p0_x_0p2.dat");
+  scan_scaled(.4,"data/scaled_f_kappa_1p0_x_0p4.dat");
+  scan_scaled(.6,"data/scaled_f_kappa_1p0_x_0p6.dat");
+  scan_scaled(.8,"data/scaled_f_kappa_1p0_x_0p8.dat");
+  scan_scaled(2.,"data/scaled_f_kappa_1p0_x_2p0.dat");
+  scan_scaled(8.,"data/scaled_f_kappa_1p0_x_8p0.dat");//*/
+
+
+  /*
   scan_Del(.2,"data/f_kappa_0p3_x_0p2.dat");
   scan_Del(.4,"data/f_kappa_0p3_x_0p4.dat");
   scan_Del(.6,"data/f_kappa_0p3_x_0p6.dat");
@@ -276,7 +448,22 @@ int main() {
   scan_scaled(.6,"data/scaled_f_kappa_0p3_x_0p6.dat");
   scan_scaled(.8,"data/scaled_f_kappa_0p3_x_0p8.dat");
   scan_scaled(2.,"data/scaled_f_kappa_0p3_x_2p0.dat");
-  scan_scaled(8.,"data/scaled_f_kappa_0p3_x_8p0.dat");
+  scan_scaled(8.,"data/scaled_f_kappa_0p3_x_8p0.dat");//*/
+
+/*
+  scan_Del(.2,"data/f_kappa_10_x_0p2.dat");
+  scan_Del(.4,"data/f_kappa_10_x_0p4.dat");
+  scan_Del(.6,"data/f_kappa_10_x_0p6.dat");
+  scan_Del(.8,"data/f_kappa_10_x_0p8.dat");
+  scan_Del(2.,"data/f_kappa_10_x_2p0.dat");
+  scan_Del(8.,"data/f_kappa_10_x_8p0.dat");
+
+  scan_scaled(.2,"data/scaled_f_kappa_10_x_0p2.dat");
+  scan_scaled(.4,"data/scaled_f_kappa_10_x_0p4.dat");
+  scan_scaled(.6,"data/scaled_f_kappa_10_x_0p6.dat");
+  scan_scaled(.8,"data/scaled_f_kappa_10_x_0p8.dat");
+  scan_scaled(2.,"data/scaled_f_kappa_10_x_2p0.dat");
+  scan_scaled(8.,"data/scaled_f_kappa_10_x_8p0.dat");//*/
 
 
   return 0;
