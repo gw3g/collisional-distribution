@@ -272,12 +272,12 @@ void tabulate_g_h(int eta_N) {
 void tabulate_r(int eta_N, double mD_over_T) {
 
   stringstream filename;
-  filename << "data/table_r_mDoT=" << fixed << setprecision(1) << mD_over_T << ".dat";
+  filename << "data/table_r_mDoT=" << fixed << setprecision(2) << mD_over_T << ".dat";
 
   fout.open(filename.str());
   //fout.open("data/table_r.dat");
   fout << "# columns:\n";
-  fout << "# eta,            r(" << fixed << setprecision(1) << mD_over_T << ")\n";
+  fout << "# eta,            r(" << fixed << setprecision(2) << mD_over_T << ")\n";
   fout.precision(8);
 
   double eta, r_a;
@@ -348,28 +348,28 @@ int main() {
   cout << "\n --> checking normalisation: " << endl;
 
   integrator(0.,1.,_S_integrand,params,&s,&s_err);
-  cout << " c0  = " << s << " [err = " << s_err << "]"<< endl;
+  cout << " b   = " << s << " [err = " << s_err << "]"<< endl;
 
   integrator(0.,1.,_ST_integrand,params,&s,&s_err);
-  cout << " cT  = " << s << " [err = " << s_err << "]"<< endl;
+  cout << " bT  = " << s << " [err = " << s_err << "]"<< endl;
 
   integrator(0.,1.,_SL_integrand,params,&s,&s_err);
-  cout << " cL  = " << s << " [err = " << s_err << "]" << endl;
+  cout << " bL  = " << s << " [err = " << s_err << "]" << endl;
 
   cout << "\n --> checking constants in large-x limit: " << endl;
 
   double temp;
   integrator(0.,1.,_S_times_eps,params,&s,&s_err);
-  cout << " c1  = " << s << " [err = " << s_err << "]"<< endl;
+  cout << " a1  = " << s << " [err = " << s_err << "]"<< endl;
   temp += s;
 
   integrator(0.,1.,_S_subtr,params,&s,&s_err);
-  cout << " c2  = " << s << " [err = " << s_err << "]"<< endl;
+  cout << " a2  = " << s << " [err = " << s_err << "]"<< endl;
   temp += s;
 
   temp *= 2.;
   temp += 1.-GAMMA_E;
-  cout << " 2(c1+c2)+1-gamma  = " << temp << endl;
+  cout << " 2(a1+a2)+1-gamma  = " << temp << endl;
 
   //return 0;
 
@@ -442,7 +442,7 @@ int main() {
 
   cout << "\n --> tabulating the r function: " << endl;
 
-  tabulate_r(5000,3.);
+  tabulate_r(5000,0.3);
 
   /*
   fout.open("data/table_r.dat");

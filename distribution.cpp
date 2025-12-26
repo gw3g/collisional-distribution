@@ -211,6 +211,11 @@ namespace itp {
     //ifstream file("data/table_g_h.dat");
     fin.open("data/table_g_h.dat");
 
+    if (!fin.is_open()) {
+      cerr << "Error: [data/table_g_h.dat] must be generated first!\n";
+      exit(EXIT_FAILURE);
+    }
+
     while (getline(fin, line)) {
       if (line.empty() || line[0]=='#') continue;
       stringstream ss(line);
@@ -231,15 +236,22 @@ namespace itp {
 
     fin.close();
 
+    if (mD_over_T>0) {
     stringstream filename;
-    filename << "data/table_r_mDoT=" << fixed << setprecision(1) << mD_over_T << ".dat";
+    filename << "data/table_r_mDoT=" << fixed << setprecision(2) << mD_over_T << ".dat";
 
-    r_large = r_large_eta_const(mD_over_T);
-    r_small = r_small_eta_const(mD_over_T);
-    cout << "\n" << " r-large = " << r_large << endl;
-    cout         << " r-small = " << r_small << endl;
+    // testing limits:
+    //r_large = r_large_eta_const(mD_over_T);
+    //r_small = r_small_eta_const(mD_over_T);
+    //cout << "\n" << " r-large = " << r_large << endl;
+    //cout         << " r-small = " << r_small << endl;
 
     fin.open(filename.str());
+
+    if (!fin.is_open()) {
+      cerr << "Error: [" << filename.str() << "] must be generated first!\n";
+      exit(EXIT_FAILURE);
+    }
     //fin.open("data/table_chi.dat");
 
     eta_list.clear();
@@ -256,6 +268,7 @@ namespace itp {
     fin.close();
 
     spline_r  = mk_spline(eta_list,r_list);
+    }
   }
 
   void free() {
@@ -288,6 +301,7 @@ namespace itp {
     else { return gsl_spline_eval(spline_g_L, eta, accelerator); }
   }
   double r(double eta) {
+    if (mD_over_T<=0.) { return 0.; }
     //if (eta<1e-3) { return (4.7866666)*sqr(eta); } // mD/T = 0.3
     //if (eta<1e-3) { return (0.0014929826)*sqr(eta); } // mD/T = 10.
     if (eta<1e-3) { return (r_small)*sqr(eta); } // mD/T = 10.
@@ -368,13 +382,43 @@ namespace itp {
     while (Del < 30.) {
       f = lev_int(xbar,Del);
       fout << scientific << Del << "    " << f << endl;
-      Del += .05;
+      Del += .005;
     }
 
     fout.close();
     cout << " finished... " << endl;//*/
                                   //
   }
+
+  // file writing (for small Delta)
+  void scan_small_D(double xbar, string fname) {
+
+    fout.open(fname);
+    fout.precision(8);
+
+    fout << "# columns: Delta/T, mD*f(Del>0), mD*f(Del<0), approx." << endl;
+
+    double f_pos, f_neg, f_app;
+    double Del = .01; // = Delta/T
+    //Del = -1.5013;
+
+
+    while (Del < 10.) {
+      f_pos = lev_int(xbar,+Del/mD_over_T);
+      f_neg = lev_int(xbar,-Del/mD_over_T);
+      f_app = (2./3.)*xbar*exp(-2.*c0*xbar)*pow( fabs(Del), -1.+(4./3.)*xbar/mD_over_T );
+      fout << scientific << Del << "    " << f_pos
+                                << "    " << f_neg
+                                << "    " << f_app << endl;
+      //Del += .01;
+      Del *= 1.01;
+    }
+
+    fout.close();
+    cout << " finished... " << endl;//*/
+                                  //
+  }
+
 
   // file writing (i.t.o. rescaled variables)
   void scan_scaled(double xbar, string fname) {
@@ -409,7 +453,18 @@ namespace itp {
 int main() {
   using namespace itp;
 
-  init(1.0);
+  init(0.);
+
+  /*
+  scan_Del(.2,"data/f_T_0_x_0p2.dat");
+  scan_Del(.4,"data/f_T_0_x_0p4.dat");
+  scan_Del(.6,"data/f_T_0_x_0p6.dat");
+  scan_Del(.8,"data/f_T_0_x_0p8.dat");
+  scan_Del(1.,"data/f_T_0_x_1p0.dat");
+  scan_Del(2.,"data/f_T_0_x_2p0.dat");
+  scan_Del(4.,"data/f_T_0_x_4p0.dat");
+  scan_Del(8.,"data/f_T_0_x_8p0.dat");//*/
+
 
   //double eta = .5;
   //
@@ -420,6 +475,9 @@ int main() {
   ////cout << " gL  = " << g_L(eta) << endl;
   //cout << " r   = " <<   r(eta) << endl;
 
+  //scan_small_D(.6,"data/f_zoom_kappa_0p5_x_0p6.dat");
+  //scan_Del(.6,"data/f_kappa_0p5_x_0p6.dat");
+  /*
   scan_Del(.2,"data/f_kappa_1p0_x_0p2.dat");
   scan_Del(.4,"data/f_kappa_1p0_x_0p4.dat");
   scan_Del(.6,"data/f_kappa_1p0_x_0p6.dat");
@@ -434,14 +492,33 @@ int main() {
   scan_scaled(2.,"data/scaled_f_kappa_1p0_x_2p0.dat");
   scan_scaled(8.,"data/scaled_f_kappa_1p0_x_8p0.dat");//*/
 
-
+  
+  //scan_scaled(4.,"data/scaled_f_T_3mD_x_4p0.dat");
+  //scan_Del(4.,"data/f_T_3mD_x_4p0.dat");
   /*
-  scan_Del(.2,"data/f_kappa_0p3_x_0p2.dat");
-  scan_Del(.4,"data/f_kappa_0p3_x_0p4.dat");
-  scan_Del(.6,"data/f_kappa_0p3_x_0p6.dat");
-  scan_Del(.8,"data/f_kappa_0p3_x_0p8.dat");
-  scan_Del(2.,"data/f_kappa_0p3_x_2p0.dat");
-  scan_Del(8.,"data/f_kappa_0p3_x_8p0.dat");
+  scan_Del(.2,"data/f_T_3mD_x_0p2.dat");
+  scan_Del(.4,"data/f_T_3mD_x_0p4.dat");
+  scan_Del(.6,"data/f_T_3mD_x_0p6.dat");
+  scan_Del(.8,"data/f_T_3mD_x_0p8.dat");
+  scan_Del(2.,"data/f_T_3mD_x_2p0.dat");
+  scan_Del(8.,"data/f_T_3mD_x_8p0.dat");
+
+  scan_scaled(.2,"data/scaled_f_T_3mD_x_0p2.dat");
+  scan_scaled(.4,"data/scaled_f_T_3mD_x_0p4.dat");
+  scan_scaled(.6,"data/scaled_f_T_3mD_x_0p6.dat");
+  scan_scaled(.8,"data/scaled_f_T_3mD_x_0p8.dat");
+  scan_scaled(2.,"data/scaled_f_T_3mD_x_2p0.dat");
+  scan_scaled(8.,"data/scaled_f_T_3mD_x_8p0.dat");//*/
+
+/*
+  scan_Del(.2,"data/f_T_0p3mD_x_0p2.dat");
+  scan_Del(.4,"data/f_T_0p3mD_x_0p4.dat");
+  scan_Del(.6,"data/f_T_0p3mD_x_0p6.dat");
+  scan_Del(.8,"data/f_T_0p3mD_x_0p8.dat");
+  scan_Del(1.,"data/f_T_0p3mD_x_1p0.dat");
+  scan_Del(2.,"data/f_T_0p3mD_x_2p0.dat");
+  scan_Del(4.,"data/f_T_0p3mD_x_4p0.dat");
+  scan_Del(8.,"data/f_T_0p3mD_x_8p0.dat");/*
 
   scan_scaled(.2,"data/scaled_f_kappa_0p3_x_0p2.dat");
   scan_scaled(.4,"data/scaled_f_kappa_0p3_x_0p4.dat");
