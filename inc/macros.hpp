@@ -13,6 +13,7 @@
 
 #define sgn(x) (double) ((x>0)-(x<0))
 #define sqr(x) ((x)*(x))
+#define cube(x) ((x)*(x)*(x))
 #define loop(i,a,b) for(int (i)=(a);(i)<(b);(i)++)
 #define sz size()
 #define ar data()

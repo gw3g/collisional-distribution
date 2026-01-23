@@ -449,11 +449,73 @@ namespace itp {
 }
 
 /*--------------------------------------------------------------------*/
+// hard part and interpolation
+
+#include <gsl/gsl_sf_zeta.h>
+#include <gsl/gsl_sf_dilog.h>
+
+double Li2(double z) { return gsl_sf_dilog(z); }
+
+double Li3(double z) { // only for z=(-\infty,1]
+  double res = 0., temp, Z3 = gsl_sf_zeta(3), lz = log(fabs(z));
+
+  if (z<-1.)        { return Li3(1./z) - lz*( sqr(lz) + sqr(M_PI) )/6. ; }
+  else if (z==1.)   { return      Z3; }
+  else if (z==-1.)  { return -.75*Z3; }
+  else if (z<0.)    { return .25*Li3(sqr(z))-Li3(-z); }
+  else if (z<.25)   {
+    temp = z;
+    for (int i=1;i<10;i++) {
+      res  += temp/cube((double)i);
+      temp *= z;
+    }
+  }
+  else if (z>.25)   {
+    res   = Z3 + sqr(M_PI)*lz/6.+.5*sqr(lz)*(1.5-log(-lz));
+    temp  = 2.;
+    for (int i=3;i<10;i++) {
+      temp *= (double)i;
+      res+= gsl_sf_zeta(3-i)*pow(lz,i)/temp;
+    }
+  }
+  return res;
+}
+
+double l1f(double x) { return log(1+exp(-x)); }
+double l2f(double x) { return Li2(-exp(-x)) ; }
+double l3f(double x) { return Li3(-exp(-x)) ; }
+double l1b(double x) { return log(1-exp(-x)); }
+double l2b(double x) { return Li2(exp(-x)) ; }
+double l3b(double x) { return Li3(exp(-x)) ; }
+
+double R_hard(double eps, double T, double mu, double nf) {
+  double mD2 = sqr(mu)*nf/(2.*sqr(M_PI)) + sqr(T)*(1.+nf/6.);
+  double Phi_f, Phi_b;
+
+  Phi_b = eps*sqr(T)*( sqr(M_PI)/6. - l2b(eps/T) ) + 2.*cube(T)*( gsl_sf_zeta(3.)-l3b(eps/T) );
+
+  Phi_f = eps*sqr(T)*( l2f((eps+mu)/T)-l2f(+mu/T) ) + 2.*cube(T)*( l3f((eps+mu)/T)-l3f(+mu/T) );
+  Phi_f += eps*sqr(T)*( l2f((eps-mu)/T)-l2f(-mu/T) ) + 2.*cube(T)*( l3f((eps-mu)/T)-l3f(-mu/T) );
+
+  double res = 6.*Phi_b + nf*Phi_f;
+  res /= cube(eps);
+  res /= sqr(2.*M_PI);
+  res /= mD2;
+  res *= 2*sqr(eps);
+  return res;
+}
+
+
+/*--------------------------------------------------------------------*/
 
 int main() {
   using namespace itp;
 
   init(0.);
+
+  cout << " R(eps=0.1,T=1,nf=3) = " << R_hard(.1,1.,0.,3.) << endl;
+  cout << " R(eps=10,T=1,nf=3) = " << R_hard(10.,1.,0.,3.) << endl;
+  cout << " R(eps=100,T=1,nf=3) = " << R_hard(100.,1.,0.,3.) << endl;
 
   /*
   scan_Del(.2,"data/f_T_0_x_0p2.dat");
