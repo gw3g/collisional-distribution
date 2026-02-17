@@ -84,10 +84,10 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
     //DelG_list[i] = DeltaG_tmp;
     //H_list[i]    = H_tmp;
 
-//    cout << setw(12) << eta 
-//         << setw(12) << G_tmp 
-//         << setw(12) << DeltaG_tmp
-//         << setw(12) << H_tmp       << endl;
+//    cout << setw(12) << eta_list[i]
+//         << setw(12) << G_list[i]
+//         << setw(12) << DelG_list[i]
+//         << setw(12) << H_list[i]       << endl;
 
 //    fout << scientific << eta
 //         <<     "    " << G_tmp
@@ -122,10 +122,10 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
     //DelG_list[i] = DeltaG_tmp;
     //H_list[i]    = H_tmp;
 
-//    cout << setw(12) << eta 
-//         << setw(12) << G_tmp 
-//         << setw(12) << DeltaG_tmp
-//         << setw(12) << H_tmp       << endl;
+//    cout << setw(12) << eta_list[idx]
+//         << setw(12) << G_list[idx]
+//         << setw(12) << DelG_list[idx]
+//         << setw(12) << H_list[idx]       << endl;
 
 //    fout << scientific << eta
 //         <<     "    " << G_tmp
@@ -154,7 +154,12 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 
 int main() {
 
+  double T=0.,mu=3,nf=3.;
 
-  print_asympt(1.,1.,3.);
-  tabulate_G_and_H(100,10.,10.,3.);
+  print_asympt(T,mu,nf);
+
+  tabulate_G_and_H(5000,T,mu,nf);
+
+  print_asympt(T,5,nf);
+  tabulate_G_and_H(5000,T,5,nf);
 }

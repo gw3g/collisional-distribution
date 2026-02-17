@@ -15,6 +15,7 @@ double H_small_eta_const(double,double,double);
 void tabulate_G_and_H(int,double,double,double);
 
 namespace itp {
+  extern double T, mu, nf;
   void init(double,double,double);
   void free();
   double G_func(double);
