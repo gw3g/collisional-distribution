@@ -22,14 +22,14 @@
 
 typedef std::vector<double> vd;
 
-std::ofstream fout;
-std::ifstream fin;
+//std::ofstream fout;
+//std::ifstream fin;
 
-const double c0  = 0.72035400;
-const double cT  = 0.24944610;
-const double cL  = 0.47090790;
+//const double c0  = 0.72035400;
+//const double cT  = 0.24944610;
+//const double cL  = 0.47090790;
 
 // for cosmetics:
-std::string dots = "\033[1;34m:: \033[0m";
-std::string reset = "\033[0m";
-std::string bold  = "\033[1m";
+//extern std::string dots = "\033[1;34m:: \033[0m";
+//extern std::string reset = "\033[0m";
+//extern std::string bold  = "\033[1m";
