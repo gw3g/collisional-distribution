@@ -5,9 +5,9 @@
 
 int    calls = 1e5;
 
-double tolosc=1e-5;
-const double epsabs = 1e-5;
-const double epsrel = 1e-5;
+double tolosc=1e-4;
+const double epsabs = 1e-4;
+const double epsrel = 1e-4;
 
 void integrator(
   double a,

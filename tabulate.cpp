@@ -5,7 +5,17 @@
 using namespace std;
 
 /*--------------------------------------------------------------------*/
-// hard part and interpolation
+// useful thermal functions:
+
+double nB(double x) {
+  if (x>0) {
+    double e = exp(-x), denom;
+    denom = - expm1(-x);
+    return e/denom;
+  }
+  else { return -(1.+nB(-x)); }
+}
+
 
 #include <gsl/gsl_sf_zeta.h>
 #include <gsl/gsl_sf_dilog.h>
@@ -64,8 +74,15 @@ double l3b(double x) {
   return Li3(exp(-x)) ; 
 }
 
+/*--------------------------------------------------------------------*/
+// hard part & interpolation
+
 double R_hard(double eps, double T, double mu, double nf) {
   double mD2 = sqr(mu)*nf/(2.*sqr(M_PI)) + sqr(T)*(1.+nf/6.); // factor of g^2 not included!
+                                                              // (in order for T, and mu to 
+                                                              // be given "in units of mD", 
+                                                              // g should be such that the 
+                                                              // (RHS of this eq)*g^2 = 1
 
   //if (eps<1e-3) { return 1.; }
   if (eps<1e-3) { return 1. - 3.*T*eps/(2.*sqr(M_PI)*mD2) - (nf-3.)*sqr(eps)/(12.*sqr(M_PI)*mD2); }
@@ -157,18 +174,27 @@ double eval_S_full(double eps, void *params) {
 }
 
 double _S_full_integrand(double X, void *params) {
+  /*
+   *  S_HTL*R_hard : eps = [a,+inf)
+   */
   double a = ((double *)params)[0];
   double eps = a - (1.-1/X);
   return eval_S_full(eps,params)/sqr(X);
 }
 
 double _S_full_times_eps(double X, void *params) {
+  /*
+   *  [ S_HTL*R_hard ]*eps : eps = [0,a]
+   */
   double a = ((double *)params)[0];
   double eps = a*(X);
   return a*eps*eval_S_full(eps,params);
 }
 
 double _S_full_subtr(double X, void *params) {
+  /*
+   *  [ S_HTL*R_hard - 1/(4*eps^2) ]*eps : eps = [a,+inf)
+   */
   double a = ((double *)params)[0];
   double eps = a-.1*(1.-1./X);
   //double eps = (X);
@@ -176,7 +202,9 @@ double _S_full_subtr(double X, void *params) {
 }
 
 double _S_full_cos_integrand(double eps, void *params) {
-  //double eps = - (1.-1/X);
+  /*
+   *  S_HTL*R_hard*nB*cos : eps linear
+   */
   double eta = ((double *)params)[0];
   //double eps = t/eta;
   //cout << " eta = " << eta << " , eps = " << eps << endl;
@@ -185,7 +213,147 @@ double _S_full_cos_integrand(double eps, void *params) {
   //return (1.)*eval_S_T(eps,params);
 }
 
+double _DeltaG_integrand(double eps, void *params) {
+  /*
+   *  S_HTL*R_hard*nB*(1-cos) : eps linear
+   */
+  double eta   = ((double *)params)[0];
+  double T     = ((double *)params)[1];
+  double res = eval_S_full(eps,params)*nB(eps/T);
+  return (1.-cos(eta*eps))*res;
+}
 
+double _DeltaG_one_integrand(double X, void *params) {
+  /*
+   *  S_HTL*R_hard*nB : eps = [a,+inf)
+   */
+  double a     = ((double *)params)[0];
+  double T     = ((double *)params)[1];
+  double eps = a-(1.-1./X);
+  double res = eval_S_full(eps,params)*nB(eps/T);
+  return res/sqr(X);
+}
+
+double _DeltaG_cos_integrand(double eps, void *params) {
+  /*
+   *  S_HTL*R_hard*nB : eps = linear
+   */
+  double eta   = ((double *)params)[0];
+  double T     = ((double *)params)[1];
+  double res = eval_S_full(eps,params)*nB(eps/T);
+  return res; // omit cos(eta*eps) factor!
+}
+
+//
+// large-eta expansion for G
+//
+
+double G_large_eta_const(double T, double mu, double nf) {
+  double params[4];
+  double res, err;
+  params[0] = 0.;
+  params[1] = T;
+  params[2] = mu;
+  params[3] = nf;
+  integrator(0,1.,_S_full_integrand,params,&res,&err);
+  return 2.*res;
+}
+
+//
+// small-eta expansion for G-tilde
+//
+
+double _DeltaG_small(double X, void *params) {
+  double eps   = - 1. + 1./X;
+  double eta   = ((double *)params)[0];
+  double T     = ((double *)params)[1];
+  double res = eval_S_full(eps,params)*nB(eps/T);
+  return res*sqr(eps/X);
+}
+
+double DeltaG_small_eta_const(double T, double mu, double nf) {
+  double params[4];
+  double res, err;
+  params[0] = 0.;
+  params[1] = T;
+  params[2] = mu;
+  params[3] = nf;
+  integrator(1e-4,1.,_DeltaG_small,params,&res,&err);
+  return 2.*res;
+}
+
+//
+// small-eta expansion for H:
+//
+
+double _H_small_subtr(double X, void *params) {
+  double eps   = 1./X;
+  double eta   = ((double *)params)[0];
+  double T     = ((double *)params)[1];
+  double res = eval_S_full(eps,params)*eps - 1/(4.*eps);
+  return res/sqr(X);
+}
+
+double _H_small_Seps(double eps, void *params) {
+  double eta   = ((double *)params)[0];
+  double T     = ((double *)params)[1];
+  double res = eval_S_full(eps,params)*eps;
+  return res;
+}
+
+double H_small_eta_const(double T, double mu, double nf) {
+  double params[4];
+  double res1, res2, err;
+  params[0] = 0.;
+  params[1] = T;
+  params[2] = mu;
+  params[3] = nf;
+  integrator(0.,1.,_H_small_subtr,params,&res1,&err);
+  integrator(0.,1.,_H_small_Seps,params,&res2,&err);
+  return res1+res2;
+}
+
+/*--------------------------------------------------------------------*/
+
+#include <gsl/gsl_sf_gamma.h>
+
+void print_asympt(double T, double mu, double nf) {
+  double a = DeltaG_small_eta_const(T,mu,nf);
+  double b = .5*G_large_eta_const(T,mu,nf);
+  double small_c = (16./9.)*pow(2./sqr(M_PI),2./3.)*cos(5*M_PI/6.)*gsl_sf_gamma(5./3.);
+  double d = H_small_eta_const(T,mu,nf);
+  cout << " small-eta expansion: "  << endl;
+  cout << "   G(eta) ~ pi*eta/4"    << endl;
+  cout << "  DG(eta) ~ a*eta^2" << endl;
+  cout << "        a ≈ " << a << endl;
+  cout << "   H(eta) ~ eta/2*[ log(1/eta) + 4*d - Gamma_E + 1 ]" << endl;
+  cout << "        d ≈ " << d << endl << endl;
+  cout << " large-eta expansion: "  << endl;
+  cout << "   G(eta) ~ 2*b + c*eta^{-5/3}" << endl;
+  cout << "        b ≈ " << b << endl;
+  cout << "        c = (16/9)*(2/pi^2)^{2/3}*cos(5pi/6)*Gamma(5/3) ≈ " << small_c << endl;
+  cout << "  DG(eta) ~ 4/3*T/mD*[ log(eta) + Gamma_E ]" << endl;
+  cout << "   H(eta) ~ 2/(3*eta)" << endl;
+}
+
+/*--------------------------------------------------------------------*/
+
+double _DeltaG(double eta, double T, double mu, double nf) {
+  if (T < 1e-3) { return 0.; }
+  double a=M_PI/2./eta;//0.;
+  double params[4];
+  double res1, res2, res3, err;
+  params[1] = T;
+  params[2] = mu;
+  params[3] = nf;
+  //cout << " gL: " << endl;
+  params[0] = eta;
+  integrator(0.,a,_DeltaG_integrand,params,&res1,&err);
+  integrate_osc(a,_DeltaG_cos_integrand,params,&res3,&err,GSL_INTEG_COSINE);
+  params[0] = a;
+  integrator(0.,1.,_DeltaG_one_integrand,params,&res2,&err);
+  return 4.*(res1+res2-res3);
+}
 
 double _H(double eta, double T, double mu, double nf) {
   double params[4];
@@ -225,9 +393,9 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 
   fout.precision(8);
   fout << "# columns:\n";
-  fout << "# eta,            G,                H\n";
+  fout << "# eta,            G,                DeltaG,           H\n";
 
-  double eta, G_tmp, H_tmp;
+  double eta, G_tmp, DeltaG_tmp, H_tmp;
   double eta_min, eta_max;
 
   //int eta_N = 5000;
@@ -235,16 +403,31 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
   eta_min = 1e-3, eta_max=1e1;
   double delta  = (eta_max-eta_min)/((double)eta_N-1);
   eta = eta_min;
+  cout << "\n --> beginning tabulation (in eta): N = " << eta_N << " , delta_eta = " << delta << endl;
+  cout << "                                    T/mD = " << T << " , mu/mD = " << mu << " , nf = " << nf << endl << endl;
+
+  cout << left
+       << setw(12) << " eta: "
+       << setw(12) << " G: "
+       << setw(12) << " Delta G: "
+       << setw(12) << " H: " << endl;
+
+  cout << right << fixed << setprecision(5);
 
   loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
 
     if (eta>1e2) { tolosc = 1e-7; }
-    G_tmp = _G(eta,T,mu,nf);
-    H_tmp = _H(eta,T,mu,nf);
-    cout << eta << endl;
+    G_tmp  = _G(eta,T,mu,nf);
+    DeltaG_tmp = _DeltaG(eta,T,mu,nf);
+    H_tmp  = _H(eta,T,mu,nf);
+    cout << setw(12) << eta 
+         << setw(12) << G_tmp 
+         << setw(12) << DeltaG_tmp
+         << setw(12) << H_tmp       << endl;
 
     fout << scientific << eta
          <<     "    " << G_tmp
+         <<     "    " << DeltaG_tmp
          <<     "    " << H_tmp
          << endl;
 
@@ -259,11 +442,13 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 
     if (eta>1e2) { tolosc = 1e-7; }
     G_tmp = _G(eta,T,mu,nf);
+    DeltaG_tmp = _DeltaG(eta,T,mu,nf);
     H_tmp = _H(eta,T,mu,nf);
     cout << eta << endl;
 
     fout << scientific << eta
          <<     "    " << G_tmp
+         <<     "    " << DeltaG_tmp
          <<     "    " << H_tmp
          << endl;
 
@@ -275,349 +460,56 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 
 }
 
-
-
-/*--------------------------------------------------------------------*/
-// useful integrands:
-
-double _S_integrand(double X, void *params) {
-  double a = ((double *)params)[0];
-  double eps = a - (1.-1/X);
-  return eval_S_tot(eps,params)/sqr(X);
-}
-
-double _ST_integrand(double X, void *params) {
-  double a = ((double *)params)[0];
-  double eps = a - (1.-1/X);
-  return eval_S_T(eps,params)/sqr(X);
-}
-
-double _SL_integrand(double X, void *params) {
-  double a = ((double *)params)[0];
-  double eps = a - (1.-1/X);
-  return eval_S_L(eps,params)/sqr(X);
-}
-
-double _S_times_eps(double X, void *params) {
-  double eps = (X);
-  return eps*eval_S_tot(eps,params);
-}
-
-double _S_subtr(double X, void *params) {
-  double eps = 1.-.1*(1.-1./X);
-  //double eps = (X);
-  return .1*eps*( eval_S_tot(eps,params) - .5/sqr(eps) )/sqr(X);
-}
-
-double _S_sin_integrand(double X, void *params) {
-  double eps = X;
-  //double eps = - (1.-1/X);
-  double eta = ((double *)params)[0];
-  //double eps = t/eta;
-  //cout << " eta = " << eta << " , eps = " << eps << endl;
-  return sin(eta*eps)*eval_S_tot(eps,params);
-}
-
-double _ST_cos_integrand(double eps, void *params) {
-  //double eps = - (1.-1/X);
-  double eta = ((double *)params)[0];
-  //double eps = t/eta;
-  //cout << " eta = " << eta << " , eps = " << eps << endl;
-  //return (1.-cos(eta*eps))*eval_S_T(eps,params);
-  return (cos(eta*eps))*eval_S_T(eps,params);
-  //return (1.)*eval_S_T(eps,params);
-}
-
-double _SL_cos_integrand(double eps, void *params) {
-  //double eps = - (1.-1/X);
-  double eta = ((double *)params)[0];
-  //double eps = t/eta;
-  //cout << " eta = " << eta << " , eps = " << eps << endl;
-  return (cos(eta*eps))*eval_S_L(eps,params);
-}
-
-/*--------------------------------------------------------------------*/
-// define the special functions g and h
-
-double h_T(double eta) {
-  double params[1];
-  double a=0.;
-  double res, err;
-  params[0] = eta;
-  //cout << " hT:" << endl;
-  integrate_osc(a,eval_S_T,params,&res,&err,GSL_INTEG_SINE);
-  return 2.*res;
-}
-
-double h_L(double eta) {
-  double params[1];
-  double a=0.;
-  double res, err;
-  params[0] = eta;
-  //cout << " hL:" << endl;
-  integrate_osc(a,eval_S_L,params,&res,&err,GSL_INTEG_SINE);
-  return 2.*res;
-}
-
-double g_T(double eta) {
-  double params[1];
-  params[0] = eta;
-  double a=M_PI/2./eta;//0.;
-  double res, err;
-  double resT2, res3;
-  double eps_max = 10.;
-
-  params[0] = eta;
-  double temp=0.;
-
-  //cout << " gT: [a,inf]" << endl;
-  integrator(0.,a,_ST_cos_integrand,params,&res3,&err);
-  integrate_osc(a,eval_S_T,params,&resT2,&err,GSL_INTEG_COSINE);
-  return 2.*(cT-res3-resT2);
-}
-
-double g_L(double eta) {
-  double params[1];
-  double a=M_PI/2./eta;//0.;
-  double res, err;
-  double resL2, res3;
-  params[0] = eta;
-  //cout << " gL: " << endl;
-  integrate_osc(0.,eval_S_L,params,&resL2,&err,GSL_INTEG_COSINE);
-  return 2.*(cL-resL2);
-}
-
-/*--------------------------------------------------------------------*/
-// the function r(eta,mD/T)
-
-double nB(double x) {
-  if (x>0) {
-    double e = exp(-x), denom;
-    denom = - expm1(-x);
-    return e/denom;
-  }
-  else { return -(1.+nB(-x)); }
-}
-
-double _r_integrand(double eps, void *params) {
-  double eta       = ((double *)params)[0];
-  double mD_over_T = ((double *)params)[1];
-  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
-  return (1.-cos(eta*eps))*res;
-}
-
-double _r_one_integrand(double X, void *params) {
-  double eta       = ((double *)params)[0];
-  double mD_over_T = ((double *)params)[1];
-  double a         = ((double *)params)[2];
-  double eps = a-(1.-1./X);
-  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
-  return res/sqr(X);
-}
-
-double _r_cos_integrand(double eps, void *params) {
-  double eta       = ((double *)params)[0];
-  double mD_over_T = ((double *)params)[1];
-  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
-  return res; // omit cos(eta*eps) factor!
-}
-
-double r(double eta, double mD_over_T) {
-  if (mD_over_T < 1e-3) { return 0.; }
-  double a=M_PI/2./eta;//0.;
-  double params[3];
-  double res1, res2, res3, err;
-  params[0] = eta;
-  params[1] = mD_over_T;
-  params[2] = a;
-  //cout << " gL: " << endl;
-  integrator(0.,a,_r_integrand,params,&res1,&err);
-  integrator(0.,1.,_r_one_integrand,params,&res2,&err);
-  integrate_osc(a,_r_cos_integrand,params,&res3,&err,GSL_INTEG_COSINE);
-  return 4.*(res1+res2-res3);
-}
-
-double _r_A(double eps, void *params) {
-  double mD_over_T = ((double *)params)[1];
-  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
-  return res - 1./(3.*eps*mD_over_T);
-}
-
-double _r_B(double X, void *params) {
-  double eps = 1./X;
-  double mD_over_T = ((double *)params)[1];
-  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
-  return res/sqr(X);
-}
-
-double _r_D(double X, void *params) {
-  double eps = - 1. + 1./X;
-  double mD_over_T = ((double *)params)[1];
-  double res = eval_S_tot(eps,params)*nB(eps*mD_over_T);
-  return res*sqr(eps)/sqr(X);
-
-}
-
-double r_large_eta_const(double mD_over_T) {
-  double params[2];
-  double res1, res2, err;
-  params[0] = 0.;
-  params[1] = mD_over_T;
-  integrator(0.,1.,_r_A,params,&res1,&err);
-  integrator(0.,1.,_r_B,params,&res2,&err);
-  return res1+res2;
-}
-
-double r_small_eta_const(double mD_over_T) {
-  double params[2];
-  double res, err;
-  params[0] = 0.;
-  params[1] = mD_over_T;
-  integrator(1e-4,1.,_r_D,params,&res,&err);
-  return 2.*res;
-}
-
 /*--------------------------------------------------------------------*/
 
-void tabulate_g_h(int eta_N) {
+double _kappa(double T, double mu, double nf) {
+  double res, err;
+  double params[4] = {0.,T,mu,nf};
 
-  fout.open("data/table_g_h.dat");
-  fout.precision(8);
-  fout << "# columns:\n";
-  fout << "# eta,            hT,               hL,               gT,               gL\n";
+  double kappa=0.;
+  double Lambda_star=2.; // = arbitrary separation scale
+  //cout << " Lambda_star = " << Lambda_star << endl;
+  params[0] = Lambda_star;
+  integrator(0.,1.,_S_full_times_eps,params,&res,&err);
+  //cout << " a1  = " << res << " [err = " << err << "]"<< endl;
+  kappa += res;
 
-  double eta, hT, hL, gT, gL;
-  double eta_min, eta_max;
+  integrator(0.,1.,_S_full_subtr,params,&res,&err);
+  //cout << " a2  = " << res << " [err = " << err << "]"<< endl;
+  kappa += res;
 
-  //int eta_N = 5000;
-
-  eta_min = 1e-3, eta_max=1e1;
-  double delta  = (eta_max-eta_min)/((double)eta_N-1);
-  eta = eta_min;
-
-  loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
-
-    if (eta>1e2) { tolosc = 1e-7; }
-    hT = h_T(eta);
-    hL = h_L(eta);
-    gT = g_T(eta);
-    gL = g_L(eta);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << hT
-         <<     "    " << hL
-         <<     "    " << gT
-         <<     "    " << gL
-         << endl;
-
-    eta += delta;
-  }
-
-  eta_min = 1e1, eta_max=1e3;
-  double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
-  eta = eta_min*ratio;
-
-  loop(i,1,eta_N) { // second loop is log scale for eta ~ [10,1000]
-
-    if (eta>1e2) { tolosc = 1e-7; }
-    hT = h_T(eta);
-    hL = h_L(eta);
-    gT = g_T(eta);
-    gL = g_L(eta);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << hT
-         <<     "    " << hL
-         <<     "    " << gT
-         <<     "    " << gL
-         << endl;
-
-    eta *= ratio;
-  }
-
-  fout.close();
-  cout << " finished... " << endl;//*/
-
-}
-
-void tabulate_r(int eta_N, double mD_over_T) {
-
-  stringstream filename;
-  filename << "data/table_r_mDoT=" << fixed << setprecision(2) << mD_over_T << ".dat";
-
-  fout.open(filename.str());
-  //fout.open("data/table_r.dat");
-  fout << "# columns:\n";
-  fout << "# eta,            r(" << fixed << setprecision(2) << mD_over_T << ")\n";
-  fout.precision(8);
-
-  double eta, r_a;
-  double eta_min, eta_max;
-
-  //int eta_N = 5000;
-
-  eta_min = 1e-3, eta_max=1e1;
-  double delta  = (eta_max-eta_min)/((double)eta_N-1);
-  eta = eta_min;
-
-  loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
-
-    if (eta>1e2) { tolosc = 1e-6; }
-    r_a = r(eta,mD_over_T);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << r_a
-         << endl;
-
-    eta += delta;
-  }
-
-  eta_min = 1e1, eta_max=1e3;
-  double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
-  eta = eta_min*ratio;
-
-  loop(i,1,eta_N) { // second loop is log scale for eta ~ [10,1000]
-
-    if (eta>1e2) { tolosc = 1e-6; }
-    r_a = r(eta,mD_over_T);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << r_a
-         << endl;
-
-    eta *= ratio;
-  }
-
-  fout.close();
-  cout << " finished... " << endl;//*/
-
-
+  kappa *= 4.;
+  kappa += 1.-GAMMA_E;
+  kappa -= log(Lambda_star);
+  //cout << " 4(a1+a2)+1-gamma-log(Lam/mD)  = " << kappa << endl; 
+  
+  return kappa;
 }
 
 /*--------------------------------------------------------------------*/
 
 int main() {
 
+  /*
   R_fixed_T_mu(1.0,0,"data/calR_T1_mu0.dat"); 
   R_fixed_T_mu(0,1.0,"data/calR_T0_mu1.dat"); 
   R_fixed_T_mu(1.,3.,"data/calR_T1_mu3.dat"); 
   R_fixed_T_mu(1.,10.,"data/calR_T1_mu10.dat"); //*/
 
-  return 0;
+
   cout.precision(8);
-  double eta_=1., T_over_mD=0., mu_over_mD=10., nf=3.;
-  double H_test = _H(eta_,T_over_mD,mu_over_mD,nf);
-  double G_test = _G(eta_,T_over_mD,mu_over_mD,nf);
+  double eta_=1., T_over_mD=20., mu_over_mD=0., nf=3.;
+  /*
+  double H_test  = _H(eta_,T_over_mD,mu_over_mD,nf);
+  double G_test  = _G(eta_,T_over_mD,mu_over_mD,nf);
+  double Gt_test = _Gt(eta_,T_over_mD,mu_over_mD,nf);
   double hT=h_T(eta_);
   double hL=h_L(eta_);
   double gT=g_T(eta_);
   double gL=g_L(eta_);
-  cout << "       H(eta)  = " << H_test << endl;
-  cout << "       G(eta)  = " << G_test << endl << endl;
+  cout << "       H(eta)  = " << H_test  << endl;
+  cout << "       G(eta)  = " << G_test  << endl << endl;
+  cout << "      Gt(eta)  = " << Gt_test << endl << endl;
 
   cout << " OLD: hT(eta)  = " << hT << endl;
   cout << " OLD: hL(eta)  = " << hL << endl;
@@ -625,7 +517,7 @@ int main() {
 
   cout << " OLD: gT(eta)  = " << gT << endl;
   cout << " OLD: gL(eta)  = " << gL << endl;
-  cout << " OLD: gL+gL    = " << gL+gT << endl << endl;
+  cout << " OLD: gL+gL    = " << gL+gT << endl << endl;//*/
 
 
   double s, s_err;
@@ -633,6 +525,7 @@ int main() {
 
   cout << "\n --> checking normalisation: " << endl;
 
+  /*
   integrator(0.,1.,_S_integrand,params,&s,&s_err);
   cout << " OLD: b   = " << s << " [err = " << s_err << "]"<< endl;
 
@@ -650,11 +543,15 @@ int main() {
   cout << " 2(a1+a2)+1-gamma  = " << temp << endl; //*/
                                                    //
                                                    //
+
   cout << endl << " NEW: " << endl;
   integrator(0.,1.,_S_full_integrand,params,&s,&s_err);
   cout << "      b   = " << s << " [err = " << s_err << "]"<< endl;
 
 
+  double kapp = _kappa(10.,0.,3.);
+  cout << "    kappa ≡ 4(a1+a2)+1-gamma-log(Lam/mD) ≈ " << kapp << endl << endl; 
+  /*
   double kappa=0.;
   double Lambda_star=.4;
   cout << " Lambda_star = " << Lambda_star << endl;
@@ -670,8 +567,8 @@ int main() {
   kappa *= 4.;
   kappa += 1.-GAMMA_E;
   kappa -= log(Lambda_star);
-  cout << " 4(a1+a2)+1-gamma-log(Lam/mD)  = " << kappa << endl; //*/
-                                                                //
+  cout << " 4(a1+a2)+1-gamma-log(Lam/mD)  = " << kappa << endl; 
+
   kappa=0.;
   Lambda_star=4.3;
   cout << " Lambda_star = " << Lambda_star << endl;
@@ -690,189 +587,15 @@ int main() {
   cout << " 4(a1+a2)+1-gamma-log(Lam/mD)  = " << kappa << endl; //*/
 
 
+  print_asympt(T_over_mD,mu_over_mD,nf);
+  //double A = Gt_small_eta_const(T_over_mD,mu_over_mD,nf);
   //tabulate_G_and_H(5000,T_over_mD,mu_over_mD,nf);
   //tabulate_G_and_H(5000,10.,mu_over_mD,nf);
   //tabulate_G_and_H(5000,1.,mu_over_mD,nf);
-  //tabulate_G_and_H(5000,.01,10.,nf);
+  //tabulate_G_and_H(5000,.0,10.,nf);
   //tabulate_G_and_H(5000,3.,1.,nf);
-
-  /*
-  double res = r(eta_,mD_over_T);
-  double cst = r_large_eta_const(mD_over_T);
-  double c2  = r_small_eta_const(mD_over_T);
-  cout << " eta  = " << eta_ << endl;
-  cout << " mD/T = " << mD_over_T << endl;
-  cout << "   r  = " << res << endl;
-  cout << " cst  = " << cst << endl;
-  cout << " est. = " << 4.*( (1./(3.*mD_over_T))*( log(eta_) + GAMMA_E ) + cst  ) << endl;
-  cout << " c2= " << c2<< endl;
-  cout << " small= " << c2*sqr(eta_) << endl;
-
-  double s, s_err;
-  double params[1] = {0.};
-
-  cout << "\n --> checking normalisation: " << endl;
-
-  integrator(0.,1.,_S_integrand,params,&s,&s_err);
-  cout << " b   = " << s << " [err = " << s_err << "]"<< endl;
-
-  integrator(0.,1.,_ST_integrand,params,&s,&s_err);
-  cout << " bT  = " << s << " [err = " << s_err << "]"<< endl;
-
-  integrator(0.,1.,_SL_integrand,params,&s,&s_err);
-  cout << " bL  = " << s << " [err = " << s_err << "]" << endl;
-
-  cout << "\n --> checking constants in large-x limit: " << endl;
-
-  double temp;
-  integrator(0.,1.,_S_times_eps,params,&s,&s_err);
-  cout << " a1  = " << s << " [err = " << s_err << "]"<< endl;
-  temp += s;
-
-  integrator(0.,1.,_S_subtr,params,&s,&s_err);
-  cout << " a2  = " << s << " [err = " << s_err << "]"<< endl;
-  temp += s;
-
-  temp *= 2.;
-  temp += 1.-GAMMA_E;
-  cout << " 2(a1+a2)+1-gamma  = " << temp << endl; //*/
-
-  //return 0;
-
-  //cout << "\n --> tabulating g & h functions: " << endl;
-
-  //tabulate_g_h(5000);
-
-  /*
-
-  cout << "\n --> tabulating g & h functions: " << endl;
-
-  fout.open("data/table_g_h.dat");
-  fout.precision(8);
-  fout << "# columns:\n";
-  fout << "# eta,            hT,               hL,               gT,               gL\n";
-
-  double eta, hT, hL, gT, gL;
-  double eta_min, eta_max;
-
-  int eta_N = 5000;
-
-  eta_min = 1e-3, eta_max=1e1;
-  double delta  = (eta_max-eta_min)/((double)eta_N-1);
-  eta = eta_min;
-
-  loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
-
-    if (eta>1e2) { tolosc = 1e-7; }
-    hT = h_T(eta);
-    hL = h_L(eta);
-    gT = g_T(eta);
-    gL = g_L(eta);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << hT
-         <<     "    " << hL
-         <<     "    " << gT
-         <<     "    " << gL
-         << endl;
-
-    eta += delta;
-  }
-
-  eta_min = 1e1, eta_max=1e3;
-  double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
-  eta = eta_min;
-
-  loop(i,0,eta_N) { // second loop is log scale for eta ~ [10,1000]
-
-    if (eta>1e2) { tolosc = 1e-7; }
-    hT = h_T(eta);
-    hL = h_L(eta);
-    gT = g_T(eta);
-    gL = g_L(eta);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << hT
-         <<     "    " << hL
-         <<     "    " << gT
-         <<     "    " << gL
-         << endl;
-
-    eta *= ratio;
-  }
-
-  fout.close();
-  cout << " finished... " << endl;//*/
-
-  //
-  //
-  //cout << "\n --> tabulating the r function: " << endl;
-  //tabulate_r(5000,0.3);
-  //
-  //
-
-  /*
-  fout.open("data/table_r.dat");
-  fout.precision(8);
-  fout << "# columns:\n";
-  fout << "# eta,            r(0.1),         r(0.3),         r(1.0),         r(10.)\n";
-
-  double eta, r_a, r_b, r_c, r_d, r_e;
-  double eta_min, eta_max;
-
-  int eta_N = 5000;
-
-  eta_min = 1e-3, eta_max=1e1;
-  double delta  = (eta_max-eta_min)/((double)eta_N-1);
-  eta = eta_min;
-
-  loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
-
-    if (eta>1e2) { tolosc = 1e-6; }
-    r_a = r(eta,.1);
-    r_b = r(eta,.3);
-    r_c = r(eta,1.);
-    r_d = r(eta,10.);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << r_a
-         <<     "    " << r_b
-         <<     "    " << r_c
-         <<     "    " << r_d
-         << endl;
-
-    eta += delta;
-  }
-
-  eta_min = 1e1, eta_max=1e3;
-  double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
-  eta = eta_min;
-
-  loop(i,0,eta_N) { // second loop is log scale for eta ~ [10,1000]
-
-    if (eta>1e2) { tolosc = 1e-6; }
-    r_a = r(eta,.1);
-    r_b = r(eta,.3);
-    r_c = r(eta,1.);
-    r_d = r(eta,10.);
-    cout << eta << endl;
-
-    fout << scientific << eta
-         <<     "    " << r_a
-         <<     "    " << r_b
-         <<     "    " << r_c
-         <<     "    " << r_d
-         << endl;
-
-    eta *= ratio;
-  }
-
-  fout.close();
-  cout << " finished... " << endl;//*/
-
+  //tabulate_G_and_H(5000,1./3.,0.,nf);
+  tabulate_G_and_H(5000,2.,10.,nf);
 
   return 0;
 }
