@@ -41,6 +41,9 @@ void integrate_osc(
   gsl_integration_workspace * WS2 = gsl_integration_workspace_alloc (limit);
   double eta = ((double *)params)[0];
   double freq = 2.*M_PI/eta;
+  //if (eta>1e0) { tolosc = 1e-5; }
+  //if (eta>1e1) { tolosc = 1e-6; }
+  //if (eta>1e2) { tolosc = 1e-6; }
 
   //gsl_integration_qawo_table* qawo_table = gsl_integration_qawo_table_alloc(omega, b - a, GSL_INTEG_SINE, limit);
   gsl_integration_qawo_table* qawo_table = gsl_integration_qawo_table_alloc(eta, freq, sin_or_cos, limit);

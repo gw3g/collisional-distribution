@@ -531,7 +531,7 @@ namespace itp {
       }
       cout << setw(5) << n << fixed << setprecision(14) << setw(21)
           << sum << setw(21) << ans << endl;
-      if ((fabs(ans-prev)<epsabs)||(n>50)) { return ans/M_PI; }
+      if ((fabs(ans-prev)<epsabs/1e2)||(n>50)) { return ans/M_PI; }
     }
     return ans/M_PI;
   }

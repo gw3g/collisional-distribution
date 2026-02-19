@@ -3,6 +3,9 @@
 #include <math.h>
 #include "macros.hpp"
 #include "base.hpp"
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include <omp.h>
 
 using namespace std;
@@ -32,6 +35,22 @@ void print_asympt(double T, double mu, double nf) {
   cout << "   H(eta) ~ 2/(3*eta)" << endl;
 }
 
+void printProgressBar(int current, int total) {
+    const int barWidth = 50;
+
+    float fraction = (float)current / total;
+    int filled = (int)(fraction * barWidth);
+
+    std::cout << "\r    [";
+    for (int i = 0; i < barWidth; ++i) {
+        if (i < filled) std::cout << "#";
+        else if (i == filled) std::cout << "#";
+        else std::cout << " ";
+    }
+    std::cout << "] " << int(fraction * 100.0) << "%";
+    std::cout.flush();
+}
+
 /*--------------------------------------------------------------------*/
 
 void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
@@ -54,16 +73,34 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
   eta_min = 1e-3, eta_max=1e1;
   double delta  = (eta_max-eta_min)/((double)eta_N-1);
   //eta = eta_min;
-  cout << "\n --> beginning tabulation (in eta): N = " << eta_N << " , delta_eta = " << delta << endl;
-  cout << "                                    T/mD = " << T << " , mu/mD = " << mu << " , nf = " << nf << endl << endl;
+  cout << "\n --> beginning tabulation (in eta): \n" << endl;
+  cout << "   G(eta) ~ 2*b + c*eta^{-5/3}" << endl;
+  cout << "        N = " << eta_N   << endl;
+  cout << "  eta_min = " << eta_min << endl;
+  cout << "  eta_max = " << eta_max << endl;
+  cout << "     T/mD = " << T 	    << endl;
+  cout << "    mu/mD = " << mu 	    << endl;
+  cout << "       nf = " << nf 	    << endl;
 
-  cout << left
-       << setw(12) << " eta: "
-       << setw(12) << " G: "
-       << setw(12) << " Delta G: "
-       << setw(12) << " H: " << endl;
+  //cout << left
+  //     << setw(12) << " eta: "
+  //     << setw(12) << " G: "
+  //     << setw(12) << " Delta G: "
+  //     << setw(12) << " H: " << endl;
 
-  cout << right << fixed << setprecision(5);
+  //cout << right << fixed << setprecision(5);
+
+  atomic<int> progress(0);
+
+  /*
+  thread progressThread([&]() {
+    while (progress < 2*eta_N) {
+      printProgressBar(progress.load(), 2*eta_N);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    printProgressBar(2*eta_N, 2*eta_N);
+  });//*/
+
 
   #pragma omp parallel for
   for (int i=0; i<eta_N; i++) {
@@ -96,12 +133,14 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 //         << endl;
 
 //    eta += delta;
+    progress++;
   }
 
   eta_min = 1e1, eta_max=1e3;
   double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
   //eta = eta_min*ratio;
 
+  
   #pragma omp parallel for
   for (int i=0; i<eta_N-1; i++) {
   //loop(i,1,eta_N) { // second loop is log scale for eta ~ [10,1000]
@@ -134,7 +173,10 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 //         << endl;
 
 //    eta *= ratio;
+    progress++;
   }
+
+  //progressThread.join();
 
   loop(i,0,2*eta_N-1) {
     fout << scientific << eta_list[i]
@@ -154,12 +196,10 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
 
 int main() {
 
-  double T=0.,mu=3,nf=3.;
+  double T=0.,mu=10,nf=3.;
 
   print_asympt(T,mu,nf);
 
   tabulate_G_and_H(5000,T,mu,nf);
 
-  print_asympt(T,5,nf);
-  tabulate_G_and_H(5000,T,5,nf);
 }

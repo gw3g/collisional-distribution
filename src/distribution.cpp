@@ -38,10 +38,11 @@ void scan_Del(double xbar, string fname) {
 
   double f;
   double Del = .01;
-  Del = -1.05013;
+  if (T>.01) { Del = -5.; }
+  //Del = -1.05013;
 
-  //while (Del < 30.) {
-  while (Del < 3.) {
+  while (Del < 30.) {
+  //while (Del < 3.) {
     f = lev_int(xbar,Del);
     fout << scientific << Del << "    " << f << endl;
     Del += .05;
@@ -82,13 +83,18 @@ void scan_scaled(double xbar, string fname) {
 
 int main() {
 
-  init(.1,10.,3.);
+  init(.0,10.,3.);
 
   if (!askToProceed()) return 0;
 
   cout << endl;
 
-  scan_Del(.2,"data/f_T_0p1_mu_10_x_0p2.dat");
+  scan_Del(.2,"data/f_T_0_mu_10_x_0p2.dat");
+  scan_Del(.4,"data/f_T_0_mu_10_x_0p4.dat");
+  scan_Del(.6,"data/f_T_0_mu_10_x_0p6.dat");
+  scan_Del(.8,"data/f_T_0_mu_10_x_0p8.dat");
+  scan_Del(4,"data/f_T_0_mu_10_x_4p0.dat");
+  scan_Del(16,"data/f_T_0_mu_10_x_16p0.dat");
 
   return 0;
 }

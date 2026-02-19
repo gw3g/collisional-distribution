@@ -12,7 +12,7 @@ double G_large_eta_const(double,double,double);
 double DeltaG_small_eta_const(double,double,double);
 double H_small_eta_const(double,double,double);
 
-void tabulate_G_and_H(int,double,double,double);
+//void tabulate_G_and_H(int,double,double,double);
 
 namespace itp {
   extern double T, mu, nf;
