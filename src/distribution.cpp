@@ -36,16 +36,23 @@ void scan_Del(double xbar, string fname) {
 
   fout << "# columns: Delta/mD, mD*f(xbar,Delta)" << endl;
 
-  double f;
-  double Del = .01;
-  if (T>.01) { Del = -5.; }
-  //Del = -1.05013;
+  double Delta_min, Delta_max;
+  int Delta_N = 100;
 
-  while (Del < 30.) {
-  //while (Del < 3.) {
-    f = lev_int(xbar,Del);
-    fout << scientific << Del << "    " << f << endl;
-    Del += .05;
+  if (T<.01) { Delta_min = .01; } // "effectively" zero temperature case
+  else { Delta_min = -5.; } 
+  Delta_max = 3e1;
+  double Delta_step = (Delta_max-Delta_min)/((double)Delta_N-1);
+
+  //double Delta = Delta_min;
+
+  #pragma omp parallel for
+  for (int i=0; i<Delta_N; i++) {
+    double Del_tmp = Delta_min + i*Delta_step;
+    double f_tmp = lev_int(xbar,Del_tmp);
+    if (fabs(Del_tmp)>1e-4) {
+      fout << scientific << Del_tmp << "    " << f_tmp << endl;
+    }
   }
 
   fout.close();
@@ -64,14 +71,26 @@ void scan_scaled(double xbar, string fname) {
 
   fout << "# columns: Delta/mD/xbar-log(xbar)-C, xbar*mD*f(xbar,Delta)" << endl;
 
-  double f;
-  double Del_over_xbar = .01;
-  Del_over_xbar = -5.0 + log(xbar) + kapp;
+  double Delta_min, Delta_max;
+  int Delta_N = 100;
 
-  while (Del_over_xbar-log(xbar)-kapp<15) {
-    f = lev_int(xbar,Del_over_xbar*xbar)*xbar;
-    fout << scientific << Del_over_xbar-log(xbar)-kapp << "    " << f << endl;
-    Del_over_xbar += .05;
+  if (T<.01) { Delta_min = .01; } // "effectively" zero temperature case
+  else { Delta_min = -5.0 + log(xbar) + kapp; }
+  Delta_max = 3e1;
+
+  double Delta_step = (Delta_max-Delta_min)/((double)Delta_N-1);
+
+  //double f;
+  //double Del_over_xbar = .01;
+  //if (T>.01) { Del_over_xbar = -5.0 + log(xbar) + kapp; }
+
+  #pragma omp parallel for
+  for (int i=0; i<Delta_N; i++) {
+    double Del_over_xbar = Delta_min + i*Delta_step;
+    double f_tmp = lev_int(xbar,Del_over_xbar*xbar)*xbar;
+    if (fabs(Del_over_xbar)>1e-4) {
+    	fout << scientific << Del_over_xbar-log(xbar)-kapp << "    " << f_tmp << endl;
+    }
   }
 
   fout.close();
@@ -83,18 +102,39 @@ void scan_scaled(double xbar, string fname) {
 
 int main() {
 
-  init(.0,10.,3.);
+  init(.0,1.,3.);
 
   if (!askToProceed()) return 0;
 
   cout << endl;
 
-  scan_Del(.2,"data/f_T_0_mu_10_x_0p2.dat");
-  scan_Del(.4,"data/f_T_0_mu_10_x_0p4.dat");
-  scan_Del(.6,"data/f_T_0_mu_10_x_0p6.dat");
-  scan_Del(.8,"data/f_T_0_mu_10_x_0p8.dat");
-  scan_Del(4,"data/f_T_0_mu_10_x_4p0.dat");
-  scan_Del(16,"data/f_T_0_mu_10_x_16p0.dat");
+  scan_Del(.1,"data/f_T_0_mu_1_x_0p1.dat");
+  scan_Del(.2,"data/f_T_0_mu_1_x_0p2.dat");
+  scan_Del(.3,"data/f_T_0_mu_1_x_0p3.dat");
+  scan_Del(.4,"data/f_T_0_mu_1_x_0p4.dat");
+  scan_Del(.6,"data/f_T_0_mu_1_x_0p6.dat");
+  scan_Del(.8,"data/f_T_0_mu_1_x_0p8.dat");
+  scan_Del(1, "data/f_T_0_mu_1_x_1p0.dat");
+  scan_Del(3, "data/f_T_0_mu_1_x_3p0.dat");
+  scan_Del(4, "data/f_T_0_mu_1_x_4p0.dat");
+  scan_Del(6, "data/f_T_0_mu_1_x_6p0.dat");
+  scan_Del(8, "data/f_T_0_mu_1_x_8p0.dat");
+  scan_Del(16,"data/f_T_0_mu_1_x_16p0.dat");
+
+  
+  scan_scaled(.1,"data/phi_T_0_mu_1_x_0p1.dat");
+  scan_scaled(.2,"data/phi_T_0_mu_1_x_0p2.dat");
+  scan_scaled(.3,"data/phi_T_0_mu_1_x_0p3.dat");
+  scan_scaled(.4,"data/phi_T_0_mu_1_x_0p4.dat");
+  scan_scaled(.6,"data/phi_T_0_mu_1_x_0p6.dat");
+  scan_scaled(.8,"data/phi_T_0_mu_1_x_0p8.dat");
+  scan_scaled(1, "data/phi_T_0_mu_1_x_1p0.dat");
+  scan_scaled(3, "data/phi_T_0_mu_1_x_3p0.dat");
+  scan_scaled(4, "data/phi_T_0_mu_1_x_4p0.dat");
+  scan_scaled(6, "data/phi_T_0_mu_1_x_6p0.dat");
+  scan_scaled(8, "data/phi_T_0_mu_1_x_8p0.dat");
+  scan_scaled(16,"data/phi_T_0_mu_1_x_16p0.dat");//*/
+
 
   return 0;
 }

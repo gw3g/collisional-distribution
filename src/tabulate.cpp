@@ -74,21 +74,12 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
   double delta  = (eta_max-eta_min)/((double)eta_N-1);
   //eta = eta_min;
   cout << "\n --> beginning tabulation (in eta): \n" << endl;
-  cout << "   G(eta) ~ 2*b + c*eta^{-5/3}" << endl;
   cout << "        N = " << eta_N   << endl;
   cout << "  eta_min = " << eta_min << endl;
   cout << "  eta_max = " << eta_max << endl;
   cout << "     T/mD = " << T 	    << endl;
   cout << "    mu/mD = " << mu 	    << endl;
   cout << "       nf = " << nf 	    << endl;
-
-  //cout << left
-  //     << setw(12) << " eta: "
-  //     << setw(12) << " G: "
-  //     << setw(12) << " Delta G: "
-  //     << setw(12) << " H: " << endl;
-
-  //cout << right << fixed << setprecision(5);
 
   atomic<int> progress(0);
 
@@ -106,73 +97,29 @@ void tabulate_G_and_H(int eta_N, double T, double mu, double nf) {
   for (int i=0; i<eta_N; i++) {
   //loop(i,0,eta_N) { // first loop is linear scale from eta ~ [0,10]
 
-    //if (eta>1e2) { tolosc = 1e-7; }
     double eta = eta_min + i*delta;  // linear scale
     eta_list[i]  = eta;
     G_list[i] = _G(eta,T,mu,nf);
     DelG_list[i] = _DeltaG(eta,T,mu,nf);
     H_list[i] = _H(eta,T,mu,nf);
-    //G_tmp  = _G(eta,T,mu,nf);
-    //DeltaG_tmp = _DeltaG(eta,T,mu,nf);
-    //H_tmp  = _H(eta,T,mu,nf);
 
-    //eta_list[i]  = eta;
-    //G_list[i]    = G_tmp;
-    //DelG_list[i] = DeltaG_tmp;
-    //H_list[i]    = H_tmp;
-
-//    cout << setw(12) << eta_list[i]
-//         << setw(12) << G_list[i]
-//         << setw(12) << DelG_list[i]
-//         << setw(12) << H_list[i]       << endl;
-
-//    fout << scientific << eta
-//         <<     "    " << G_tmp
-//         <<     "    " << DeltaG_tmp
-//         <<     "    " << H_tmp
-//         << endl;
-
-//    eta += delta;
     progress++;
   }
 
   eta_min = 1e1, eta_max=1e3;
   double ratio  = pow(eta_max/eta_min,1./((double)eta_N-1));
-  //eta = eta_min*ratio;
-
   
   #pragma omp parallel for
   for (int i=0; i<eta_N-1; i++) {
   //loop(i,1,eta_N) { // second loop is log scale for eta ~ [10,1000]
 
-    //if (eta>1e2) { tolosc = 1e-7; }
     double eta = eta_min * pow(ratio, i+1);  // log scale
     int idx = i + eta_N;                   // store in second half of arrays
     eta_list[idx]  = eta;
     G_list[idx] = _G(eta,T,mu,nf);
     DelG_list[idx] = _DeltaG(eta,T,mu,nf);
     H_list[idx] = _H(eta,T,mu,nf);
-    //G_tmp = _G(eta,T,mu,nf);
-    //DeltaG_tmp = _DeltaG(eta,T,mu,nf);
-    //H_tmp = _H(eta,T,mu,nf);
 
-    //eta_list[i]  = eta;
-    //G_list[i]    = G_tmp;
-    //DelG_list[i] = DeltaG_tmp;
-    //H_list[i]    = H_tmp;
-
-//    cout << setw(12) << eta_list[idx]
-//         << setw(12) << G_list[idx]
-//         << setw(12) << DelG_list[idx]
-//         << setw(12) << H_list[idx]       << endl;
-
-//    fout << scientific << eta
-//         <<     "    " << G_tmp
-//         <<     "    " << DeltaG_tmp
-//         <<     "    " << H_tmp
-//         << endl;
-
-//    eta *= ratio;
     progress++;
   }
 
@@ -198,8 +145,10 @@ int main() {
 
   double T=0.,mu=10,nf=3.;
 
-  print_asympt(T,mu,nf);
+  //print_asympt(T,mu,nf);
 
-  tabulate_G_and_H(5000,T,mu,nf);
+  //tabulate_G_and_H(5000,T,mu,nf);
+  //tabulate_G_and_H(5000,0,5,nf);
+  tabulate_G_and_H(5000,0,1,nf);
 
 }
